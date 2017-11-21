@@ -12,6 +12,7 @@ More info about Dialogflow webhooks could be found here:
 
 This provides fulfillment for the following intents:
   1. Weather - uses [Yahoo! Weather API](https://developer.yahoo.com/weather/)
+    
     Action: yahooWeatherForecast
     Parameters:
       geo-city
