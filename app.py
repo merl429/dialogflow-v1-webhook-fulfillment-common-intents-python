@@ -50,17 +50,35 @@ def webhook():
 
 
 def processRequest(req):
-    if req.get("result").get("action") != "yahooWeatherForecast":
+    if req.get("result").get("action") == "yahooWeatherForecast":
+        baseurl = "https://query.yahooapis.com/v1/public/yql?"
+        yql_query = makeYqlQuery(req)
+        if yql_query is None:
+            return {}
+        yql_url = baseurl + urlencode({'q': yql_query}) + "&format=json"
+        result = urlopen(yql_url).read()
+        data = json.loads(result)
+        res = makeWebhookResult(data)
+        return res
+    elif req.get("result").get("action") == "currencyFeedConverter":
+        usdUrl = "http://spreadsheets.google.com/feeds/list/0Av2v4lMxiJ1AdE9laEZJdzhmMzdmcW90VWNfUTYtM2c/2/public/basic?alt=json"
+        eurUrl = "http://spreadsheets.google.com/feeds/list/0Av2v4lMxiJ1AdE9laEZJdzhmMzdmcW90VWNfUTYtM2c/1/public/basic?alt=json"
+        gbpUrl = "http://spreadsheets.google.com/feeds/list/0Av2v4lMxiJ1AdE9laEZJdzhmMzdmcW90VWNfUTYtM2c/5/public/basic?alt=json"
+        usdData = json.loads(urlopen(usdUrl).read())
+        eurData = json.loads(urlopen(eurUrl).read())
+        gbpData = json.loads(urlopen(gbpUrl).read())
+        
+        forexData = combineForexData(usdData,eurData,gbpData)
+        
+        toCurrency = req.get("result").get("parameters").get("Currency").upper()
+        unitCurrency = req.get("result").get("parameters").get("unit-currency")
+        firstUnitCurrency = unitCurrency[0]
+        fromCurrency = firstUnitCurrency.get("currency").upper()
+        amount = firstUnitCurrency.get("amount")
+        res = getCurrency(forexData,amount,fromCurrency,toCurrency)
+        return res
+    else:
         return {}
-    baseurl = "https://query.yahooapis.com/v1/public/yql?"
-    yql_query = makeYqlQuery(req)
-    if yql_query is None:
-        return {}
-    yql_url = baseurl + urlencode({'q': yql_query}) + "&format=json"
-    result = urlopen(yql_url).read()
-    data = json.loads(result)
-    res = makeWebhookResult(data)
-    return res
 
 
 def makeYqlQuery(req):
@@ -110,6 +128,49 @@ def makeWebhookResult(data):
         # "data": data,
         # "contextOut": [],
         "source": "apiai-weather-webhook-sample"
+    }
+
+    
+def combineForexData(usdData,eurData,gbpData):
+    forex = {}
+    for x in usdData['feed']['entry']:
+        key = 'USD-'+x['title']['$t']
+        factorData = x['content']['$t']
+        factorA,factorB = factorData.split(" ")
+        forex[key] = factorB
+    for y in eurData['feed']['entry']:
+        key = 'EUR-'+y['title']['$t']
+        factorData = y['content']['$t']
+        factorA,factorB = factorData.split(" ")
+        forex[key] = factorB
+    for z in gbpData['feed']['entry']:
+        key = 'GBP-'+z['title']['$t']
+        factorData = z['content']['$t']
+        factorA,factorB = factorData.split(" ")
+        forex[key] = factorB
+    return forex
+    
+def getCurrency(forex,amount,fromCurrency,toCurrency):
+    speech = "One or both currencies are not supported"
+    key = fromCurrency+"-"+toCurrency
+    if key in forex:
+        factor = forex.get(key)
+        converted = '{:,.2f}'.format(float(factor) * amount)
+        speech = str(amount) + fromCurrency + " = " + converted + toCurrency
+    else:
+        key1 = "USD-"+fromCurrency
+        key2 = "USD-"+toCurrency
+        if key1 in forex and key2 in forex:
+            factor1 = forex.get(key1)
+            factor2 = forex.get(key2)
+            converted = '{:,.2f}'.format(amount / float(factor1) * float(factor2))
+            speech = str(amount) + fromCurrency + " = " + converted + toCurrency
+    return {
+        "speech": speech,
+        "displayText": speech,
+        "data": {},
+        "contextOut": [],
+        "source": "Google Forex"
     }
 
 
