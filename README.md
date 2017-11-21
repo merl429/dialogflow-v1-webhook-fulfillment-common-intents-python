@@ -17,6 +17,7 @@ This provides fulfillment for the following intents:
       geo-city
     
   2. Currency Converter - uses [Currencyfeed data sheet API](http://currencyfeed.com/)
+    
     Action: currencyFeedConverter
     Parameters:
       Currency (String, Currency to convert to, 3 character currency code)
